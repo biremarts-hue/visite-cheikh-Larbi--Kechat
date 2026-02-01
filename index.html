@@ -625,7 +625,7 @@
         // Génération des dates du Ramadan 2026 (1er jour = Mardi 17 février)
         function generateRamadanDates() {
             const dates = [];
-            const startDate = new Date('2026-02-17'); // Mardi 17 février = 1er Ramadan
+            const startDate = new Date('2026-02-18'); // Mercredi 18 février = 1er Ramadan
             const endDate = new Date('2026-03-18');   // 30 jours de Ramadan
             
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
