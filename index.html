@@ -545,23 +545,13 @@
                 </div>
 
                 <div class="form-group">
-                    <label>📍 Adresse complète de la mosquée * :</label>
-                    <input type="text" id="mosqueAddress" placeholder="Adresse, Code postal, Ville" required>
-                </div>
-
-                <div class="form-group">
                     <label>👤 Nom de la personne à contacter * :</label>
-                    <input type="text" id="contactName" placeholder="Nom et Prénom de la personne responsable" required>
+                    <input type="text" id="contactName" placeholder="Nom et Prénom" required>
                 </div>
 
                 <div class="form-group">
-                    <label>📞 Numéro de téléphone de contact * :</label>
+                    <label>📞 Numéro de téléphone * :</label>
                     <input type="tel" id="contactPhone" placeholder="06 XX XX XX XX" required>
-                </div>
-
-                <div class="form-group">
-                    <label>📧 Email de contact * :</label>
-                    <input type="email" id="contactEmail" placeholder="contact@mosquee.fr" required>
                 </div>
 
                 <div class="form-group">
@@ -625,7 +615,7 @@
         // Génération des dates du Ramadan 2026 (1er jour = Mardi 17 février)
         function generateRamadanDates() {
             const dates = [];
-            const startDate = new Date('2026-02-18'); // Mercredi 18 février = 1er Ramadan
+            const startDate = new Date('2026-02-17'); // Mardi 17 février = 1er Ramadan
             const endDate = new Date('2026-03-18');   // 30 jours de Ramadan
             
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -663,13 +653,9 @@
             try {
                 document.getElementById('loadingCalendar').style.display = 'block';
                 
-                if (GOOGLE_SCRIPT_URL !== 'VOTRE_URL_GOOGLE_SCRIPT_ICI') {
-                    const response = await fetch(GOOGLE_SCRIPT_URL);
-                    const data = await response.json();
-                    reservations = data;
-                } else {
-                    reservations = JSON.parse(localStorage.getItem('sheikh_reservations') || '[]');
-                }
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                const data = await response.json();
+                reservations = data;
                 
                 document.getElementById('loadingCalendar').style.display = 'none';
                 initCalendar();
@@ -678,6 +664,7 @@
                 console.error('Erreur chargement:', error);
                 document.getElementById('loadingCalendar').style.display = 'none';
                 initCalendar();
+                loadPublicProgram();
             }
         }
 
@@ -706,14 +693,16 @@
             const timeSlotsDiv = document.createElement('div');
             timeSlotsDiv.className = 'time-slots';
             
-            // Week-end = Asr seulement, En semaine = Icha après Tarawih
+            // Week-end = Asr seulement, En semaine = Icha
             const availableSlots = dateObj.isWeekend ? [timeSlotAsr] : [timeSlotIcha];
             
             availableSlots.forEach(slot => {
-                const isReserved = reservations.some(r => 
-                    r.Date === new Date(dateObj.date).toLocaleDateString('fr-FR') && 
-                    r.Horaire === slot.label
-                );
+                const isReserved = reservations.some(r => {
+                    const rDate = r.Date || r.date;
+                    const rHoraire = r.Horaire || r.horaire;
+                    return rDate === new Date(dateObj.date).toLocaleDateString('fr-FR') && 
+                           rHoraire === slot.label;
+                });
                 
                 const timeSlot = document.createElement('div');
                 timeSlot.className = `time-slot ${isReserved ? 'reserved' : ''}`;
@@ -721,6 +710,7 @@
                 
                 if (isReserved) {
                     timeSlot.innerHTML += '<br><strong style="color: #d32f2f;">❌ RÉSERVÉ</strong>';
+                    card.style.display = 'none'; // Cacher complètement la carte si réservée
                 } else {
                     timeSlot.onclick = () => selectSlot(dateObj, slot, timeSlot);
                 }
@@ -754,13 +744,11 @@
 
         async function submitReservation() {
             const mosqueName = document.getElementById('mosqueName').value.trim();
-            const mosqueAddress = document.getElementById('mosqueAddress').value.trim();
             const contactName = document.getElementById('contactName').value.trim();
             const contactPhone = document.getElementById('contactPhone').value.trim();
-            const contactEmail = document.getElementById('contactEmail').value.trim();
             const theme = document.getElementById('theme').value.trim();
             
-            if (!mosqueName || !mosqueAddress || !contactName || !contactPhone || !contactEmail) {
+            if (!mosqueName || !contactName || !contactPhone) {
                 showMessage('Veuillez remplir tous les champs obligatoires', 'error');
                 return;
             }
@@ -780,35 +768,28 @@
                 ramadanDay: selectedDateObj.ramadanDay,
                 horaire: selectedTimeSlot.label,
                 mosqueName,
-                mosqueAddress,
+                mosqueAddress: '',
                 contactName,
                 contactPhone,
-                contactEmail,
+                contactEmail: '',
                 theme: theme || 'Non spécifié',
                 conferencier: 'Cheikh Dr. Larbi KECHAT',
                 timestamp: new Date().toLocaleString('fr-FR')
             };
             
             try {
-                if (GOOGLE_SCRIPT_URL !== 'VOTRE_URL_GOOGLE_SCRIPT_ICI') {
-                    await fetch(GOOGLE_SCRIPT_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(reservation)
-                    });
-                } else {
-                    reservations.push(reservation);
-                    localStorage.setItem('sheikh_reservations', JSON.stringify(reservations));
-                }
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reservation)
+                });
                 
                 showMessage('✅ Réservation enregistrée avec succès! Vous serez contacté prochainement.', 'success');
                 
                 document.getElementById('mosqueName').value = '';
-                document.getElementById('mosqueAddress').value = '';
                 document.getElementById('contactName').value = '';
                 document.getElementById('contactPhone').value = '';
-                document.getElementById('contactEmail').value = '';
                 document.getElementById('theme').value = '';
                 document.getElementById('reservationForm').classList.remove('active');
                 
@@ -837,17 +818,16 @@
             
             programList.innerHTML = reservations
                 .sort((a, b) => {
-                    const dateA = new Date(a.date.split('/').reverse().join('-'));
-                    const dateB = new Date(b.date.split('/').reverse().join('-'));
+                    const dateA = new Date(a.Date.split('/').reverse().join('-'));
+                    const dateB = new Date(b.Date.split('/').reverse().join('-'));
                     return dateA - dateB;
                 })
                 .map(r => `
                     <div class="program-item">
-                        <div class="date">📅 ${r.day} ${r.date}</div>
-                        <div style="color: #757575; margin-bottom: 10px; font-weight: 500;">🕐 ${r.horaire}</div>
-                        <div class="mosque">🕌 ${r.mosqueName}</div>
-                        <div class="location">📍 ${r.mosqueAddress}</div>
-                        ${r.theme !== 'Non spécifié' ? `<div style="color: #555; margin-top: 8px;">📖 Thème : ${r.theme}</div>` : ''}
+                        <div class="date">📅 ${r.Jour} ${r.Date}</div>
+                        <div style="color: #757575; margin-bottom: 10px; font-weight: 500;">🕐 ${r.Horaire}</div>
+                        <div class="mosque">🕌 ${r.Mosquée}</div>
+                        ${r.Thème && r.Thème !== 'Non spécifié' ? `<div style="color: #555; margin-top: 8px;">📖 Thème : ${r.Thème}</div>` : ''}
                     </div>
                 `).join('');
         }
@@ -890,13 +870,9 @@
             list.innerHTML = '';
             
             try {
-                if (GOOGLE_SCRIPT_URL !== 'VOTRE_URL_GOOGLE_SCRIPT_ICI') {
-                    const response = await fetch(GOOGLE_SCRIPT_URL);
-                    const data = await response.json();
-                    reservations = data;
-                } else {
-                    reservations = JSON.parse(localStorage.getItem('sheikh_reservations') || '[]');
-                }
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                const data = await response.json();
+                reservations = data;
                 
                 spinner.style.display = 'none';
                 
@@ -908,17 +884,16 @@
                 list.innerHTML = reservations
                     .map(r => `
                         <div class="reservation-item">
-                            <strong style="color: #9C27B0;">📅 ${r.day} ${r.date}</strong><br>
-                            <strong style="color: #FF9800;">🕐 ${r.horaire}</strong><br>
-                            <strong>🕌 Mosquée :</strong> ${r.mosqueName}<br>
-                            <strong>📍 Adresse :</strong> ${r.mosqueAddress}<br>
-                            <strong>👤 Contact :</strong> ${r.contactName}<br>
-                            <strong>📞 Téléphone :</strong> ${r.contactPhone}<br>
-                            <strong>📧 Email :</strong> ${r.contactEmail}<br>
-                            <strong>📖 Thème :</strong> ${r.theme}<br>
-                            <small style="color: #999;">Réservé le : ${r.timestamp}</small>
+                            <strong style="color: #9C27B0;">📅 ${r.Jour} ${r.Date}</strong><br>
+                            <strong style="color: #FF9800;">🕐 ${r.Horaire}</strong><br>
+                            <strong>🕌 Mosquée :</strong> ${r.Mosquée}<br>
+                            <strong>👤 Contact :</strong> ${r.Contact}<br>
+                            <strong>📞 Téléphone :</strong> ${r.Téléphone}<br>
+                            <strong>📖 Thème :</strong> ${r.Thème}<br>
+                            <small style="color: #999;">Réservé le : ${r.Timestamp}</small>
                         </div>
                     `).join('');
+                loadPublicProgram();
                     
             } catch (error) {
                 spinner.style.display = 'none';
