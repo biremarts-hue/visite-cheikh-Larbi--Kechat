@@ -283,6 +283,12 @@
             transform: none;
         }
 
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9em;
+            width: auto;
+        }
+
         .btn-danger {
             background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
         }
@@ -381,6 +387,12 @@
             margin-bottom: 10px;
             border-radius: 8px;
             border-left: 4px solid #9C27B0;
+        }
+
+        .reservation-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
         }
 
         .legend {
@@ -506,7 +518,7 @@
 
             <div class="info-section">
                 <h2>ℹ️ Informations sur les réservations</h2>
-                <p><strong>📅 Période disponible :</strong> Du 17 février au 18 mars 2026 (Ramadan 1447)</p>
+                <p><strong>📅 Période disponible :</strong> Du lundi 23 février au lundi 9 mars 2026</p>
                 <p><strong>🕐 Horaires disponibles :</strong></p>
                 <ul>
                     <li><strong>En semaine (Lundi-Vendredi) :</strong> Avant Salat Al-Icha (~20h00)</li>
@@ -605,6 +617,7 @@
     <script>
         // Configuration Google Sheets
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1VUliIGgcMf0-h0LeL36CSEP8LBXWv_XvhAOUbH3Srol03cVXoJpn7sCMMMLmVAs74A/exec';
+        const GOOGLE_SHEET_ID = '1pxQ20lI1hqkmrsxICAG7I-ZmZb7WN52-'; // À remplacer par votre ID Google Sheet
         const ADMIN_CREDENTIALS = { username: 'admin', password: 'mosq69150*' };
         
         let isAdminLoggedIn = sessionStorage.getItem('adminLoggedIn') === 'true';
@@ -612,11 +625,11 @@
         let selectedDateObj = null;
         let selectedTimeSlot = null;
 
-        // Génération des dates du Ramadan 2026 (1er jour = Mardi 17 février)
+        // Génération des dates (Lundi 23 février au Lundi 9 mars 2026)
         function generateRamadanDates() {
             const dates = [];
-            const startDate = new Date('2026-02-17'); // Mardi 17 février = 1er Ramadan
-            const endDate = new Date('2026-03-18');   // 30 jours de Ramadan
+            const startDate = new Date('2026-02-23'); // Lundi 23 février
+            const endDate = new Date('2026-03-09');   // Lundi 9 mars
             
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
                 const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -688,7 +701,7 @@
             
             const dateInfo = document.createElement('div');
             dateInfo.className = 'date-info';
-            dateInfo.textContent = `${dateObj.ramadanDay}${dateObj.ramadanDay === 1 ? 'er' : 'ème'} jour de Ramadan`;
+            dateInfo.textContent = `Jour ${dateObj.ramadanDay}`;
             
             const timeSlotsDiv = document.createElement('div');
             timeSlotsDiv.className = 'time-slots';
@@ -710,7 +723,7 @@
                 
                 if (isReserved) {
                     timeSlot.innerHTML += '<br><strong style="color: #d32f2f;">❌ RÉSERVÉ</strong>';
-                    card.style.display = 'none'; // Cacher complètement la carte si réservée
+                    card.style.display = 'none'; // Cacher la carte si réservée
                 } else {
                     timeSlot.onclick = () => selectSlot(dateObj, slot, timeSlot);
                 }
@@ -882,7 +895,7 @@
                 }
                 
                 list.innerHTML = reservations
-                    .map(r => `
+                    .map((r, index) => `
                         <div class="reservation-item">
                             <strong style="color: #9C27B0;">📅 ${r.Jour} ${r.Date}</strong><br>
                             <strong style="color: #FF9800;">🕐 ${r.Horaire}</strong><br>
@@ -891,6 +904,9 @@
                             <strong>📞 Téléphone :</strong> ${r.Téléphone}<br>
                             <strong>📖 Thème :</strong> ${r.Thème}<br>
                             <small style="color: #999;">Réservé le : ${r.Timestamp}</small>
+                            <div class="reservation-actions">
+                                <button class="btn btn-danger btn-small" onclick="deleteReservation(${index})">🗑️ Supprimer</button>
+                            </div>
                         </div>
                     `).join('');
                 loadPublicProgram();
@@ -902,16 +918,49 @@
             }
         }
 
+        async function deleteReservation(index) {
+            if (!confirm('Êtes-vous sûr de vouloir supprimer cette réservation ?')) {
+                return;
+            }
+
+            const reservation = reservations[index];
+            
+            try {
+                // Suppression dans Google Sheets
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        date: reservation.Date,
+                        horaire: reservation.Horaire
+                    })
+                });
+                
+                showMessage('✅ Réservation supprimée avec succès!', 'success');
+                
+                setTimeout(() => {
+                    loadAdminReservations();
+                    loadReservations();
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Erreur:', error);
+                showMessage('❌ Erreur lors de la suppression.', 'error');
+            }
+        }
+
         function exportToCSV() {
             if (reservations.length === 0) {
                 showMessage('Aucune réservation à exporter', 'error');
                 return;
             }
             
-            const headers = ['Date', 'Jour', 'Jour Ramadan', 'Horaire', 'Mosquée', 'Adresse', 'Contact', 'Téléphone', 'Email', 'Thème', 'Timestamp'];
+            const headers = ['Date', 'Jour', 'Horaire', 'Mosquée', 'Contact', 'Téléphone', 'Thème', 'Timestamp'];
             const rows = reservations.map(r => [
-                r.date, r.day, r.ramadanDay, r.horaire, r.mosqueName, r.mosqueAddress,
-                r.contactName, r.contactPhone, r.contactEmail, r.theme, r.timestamp
+                r.Date, r.Jour, r.Horaire, r.Mosquée,
+                r.Contact, r.Téléphone, r.Thème, r.Timestamp
             ]);
             
             let csv = headers.join(',') + '\n';
@@ -929,7 +978,7 @@
         }
 
         function openGoogleSheet() {
-            window.open('https://docs.google.com/spreadsheets/', '_blank');
+            window.open(`https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}`, '_blank');
         }
 
         loadReservations();
